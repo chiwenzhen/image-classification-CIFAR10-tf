@@ -1,5 +1,5 @@
 # coding=utf-8
-"""Builds a 2-layer fully-connected neural network"""
+"""构建2层全连接网络"""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -9,125 +9,116 @@ import tensorflow as tf
 import numpy as np
 
 
-def inference(images, image_pixels, hidden_units, classes, reg_constant=0):
-    """Build the model up to where it may be used for inference.
+def inference(images, num_image_pixels, num_hidden_units, num_classes, reg_constant=0):
+    """构建神经网络, 并进行前向传播计算
 
     Args:
-        images: Images placeholder (input data).
-        image_pixels: Number of pixels per image.
-        hidden_units: Size of the first (hidden) layer.
-        classes: Number of possible image classes/labels.
-        reg_constant: Regularization constant (default 0).
+        images:             图片集
+        num_image_pixels:   图片的像素数.
+        num_hidden_units:   第一层(隐藏层)的神经元个数.
+        num_classes:        图片类别数
+        reg_constant:       正则化常数(默认0).
 
     Returns:
-        logits: Output tensor containing the computed logits.
+        logits: 计算图片类别的tensor.
     """
 
-    # Layer 1
+    # 第1层
     with tf.variable_scope('Layer1'):
-        # Define the variables
+        # 第1层权值
         weights = tf.get_variable(
             name='weights',
-            shape=[image_pixels, hidden_units],
+            shape=[num_image_pixels, num_hidden_units],
             initializer=tf.truncated_normal_initializer(
-                stddev=1.0 / np.sqrt(float(image_pixels))),
+                stddev=1.0 / np.sqrt(float(num_image_pixels))),
             regularizer=tf.contrib.layers.l2_regularizer(reg_constant)
         )
 
-        biases = tf.Variable(tf.zeros([hidden_units]), name='biases')
+        biases = tf.Variable(tf.zeros([num_hidden_units]), name='biases')
 
-        # Define the layer's output
+        # 第1层的输出
         hidden = tf.nn.relu(tf.matmul(images, weights) + biases)
 
-    # Layer 2
+    # 第2层
     with tf.variable_scope('Layer2'):
-        # Define variables
-        weights = tf.get_variable('weights', [hidden_units, classes],
+        # 第2层权值
+        weights = tf.get_variable('weights', [num_hidden_units, num_classes],
                                   initializer=tf.truncated_normal_initializer(
-                                      stddev=1.0 / np.sqrt(float(hidden_units))),
+                                      stddev=1.0 / np.sqrt(float(num_hidden_units))),
                                   regularizer=tf.contrib.layers.l2_regularizer(reg_constant))
 
-        biases = tf.Variable(tf.zeros([classes]), name='biases')
+        biases = tf.Variable(tf.zeros([num_classes]), name='biases')
 
-        # Define the layer's output
+        # 第2层的输出
         logits = tf.matmul(hidden, weights) + biases
 
-        # Define summery-operation for 'logits'-variable
         tf.summary.histogram('logits', logits)
 
     return logits
 
 
 def loss(logits, labels):
-    """Calculates the loss from logits and labels.
+    """计算logits和labels之间的损失.
 
   Args:
     logits: Logits tensor, float - [batch size, number of classes].
     labels: Labels tensor, int64 - [batch size].
 
   Returns:
-    loss: Loss tensor of type float.
+    loss: Loss tensor, float.
   """
 
     with tf.name_scope('Loss'):
-        # Operation to determine the cross entropy between logits and labels
+        # 计算logits和labels间的交叉熵
         cross_entropy = tf.reduce_mean(
             tf.nn.sparse_softmax_cross_entropy_with_logits(
                 logits, labels, name='cross_entropy'))
 
-        # Operation for the loss function
+        # 最终损失要加上正则化项
         loss = cross_entropy + tf.add_n(tf.get_collection(
             tf.GraphKeys.REGULARIZATION_LOSSES))
 
-        # Add a scalar summary for the loss
         tf.summary.scalar('loss', loss)
 
     return loss
 
 
 def training(loss, learning_rate):
-    """Sets up the training operation.
-
-    Creates an optimizer and applies the gradients to all trainable variables.
+    """训练.
 
     Args:
-      loss: Loss tensor, from loss().
-      learning_rate: The learning rate to use for gradient descent.
+      loss: Loss tensor
+      learning_rate: 学习速率
 
     Returns:
-      train_step: The op for training.
+      train_step: train operation.
     """
 
-    # Create a variable to track the global step
+    # 创建变量跟踪全局迭代次数
     global_step = tf.Variable(0, name='global_step', trainable=False)
 
-    # Create a gradient descent optimizer
-    # (which also increments the global step counter)
-    train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(
-        loss, global_step=global_step)
+    # 梯度下降优化（自动更新迭代次数）
+    train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step)
 
     return train_step
 
 
 def evaluation(logits, labels):
-    """Evaluates the quality of the logits at predicting the label.
+    """计算准确率.
 
     Args:
       logits: Logits tensor, float - [batch size, number of classes].
       labels: Labels tensor, int64 - [batch size].
 
     Returns:
-      accuracy: the percentage of images where the class was correctly predicted.
+      accuracy: 图片分类准确率
   """
 
     with tf.name_scope('Accuracy'):
-        # Operation comparing prediction with true label
         correct_prediction = tf.equal(tf.argmax(logits, 1), labels)
 
-        # Operation calculating the accuracy of the predictions
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-        # Summary operation for the accuracy
         tf.summary.scalar('train_accuracy', accuracy)
 
     return accuracy
